@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тарифы - PriceWatch Agent</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .pricing-card {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .pricing-card:hover {
+            transform: translateY(-10px);
+        }
+
+        .pricing-card.featured {
+            border: 2px solid #667eea;
+            position: relative;
+        }
+
+        .pricing-card.featured::before {
+            content: "Популярный";
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #667eea;
+            color: white;
+            padding: 5px 20px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .plan-name {
+            font-size: 1.5rem;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .plan-price {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .plan-price span {
+            font-size: 1rem;
+            color: #666;
+        }
+
+        .plan-features {
+            list-style: none;
+            margin: 30px 0;
+            text-align: left;
+        }
+
+        .plan-features li {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .plan-features li:last-child {
+            border-bottom: none;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 15px 40px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: bold;
+            transition: background 0.3s;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #667eea;
+            color: #667eea;
+        }
+
+        .btn-outline:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💳 Выберите тариф</h1>
+
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <div class="plan-name">Basic</div>
+                <div class="plan-price">$29<span>/мес</span></div>
+                <ul class="plan-features">
+                    <li>✅ До 50 товаров</li>
+                    <li>✅ Проверка каждые 30 минут</li>
+                    <li>✅ Telegram-уведомления</li>
+                    <li>✅ История цен</li>
+                    <li>❌ Приоритетная поддержка</li>
+                </ul>
+                <button class="btn btn-outline" onclick="selectPlan('basic')">Выбрать</button>
+            </div>
+
+            <div class="pricing-card featured">
+                <div class="plan-name">Pro</div>
+                <div class="plan-price">$79<span>/мес</span></div>
+                <ul class="plan-features">
+                    <li>✅ До 200 товаров</li>
+                    <li>✅ Проверка каждые 15 минут</li>
+                    <li>✅ Telegram-уведомления</li>
+                    <li>✅ История цен</li>
+                    <li>✅ Приоритетная поддержка</li>
+                </ul>
+                <button class="btn" onclick="selectPlan('pro')">Выбрать</button>
+            </div>
+
+            <div class="pricing-card">
+                <div class="plan-name">Enterprise</div>
+                <div class="plan-price">$199<span>/мес</span></div>
+                <ul class="plan-features">
+                    <li>✅ До 1000 товаров</li>
+                    <li>✅ Проверка каждые 5 минут</li>
+                    <li>✅ Telegram-уведомления</li>
+                    <li>✅ История цен</li>
+                    <li>✅ Приоритетная поддержка</li>
+                </ul>
+                <button class="btn btn-outline" onclick="selectPlan('enterprise')">Выбрать</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function selectPlan(plan) {
+            const user_id = 123456789; // Замени на реальный user_id
+
+            try {
+                const response = await fetch('/payments/create-checkout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_id: user_id,
+                        plan: plan
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    window.location.href = data.checkout_url;
+                } else {
+                    const error = await response.json();
+                    alert('Ошибка: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
