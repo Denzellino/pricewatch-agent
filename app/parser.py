@@ -98,12 +98,14 @@ def save_product_data(db: Session, product_data: Dict[str, Any], store_id: int) 
             store_id=store_id,
             product_name=product_data['name'],
             product_url=product_data['url'],
-            current_price=product_data['price']
+            current_price=product_data['price'],
+            currency=product_data.get('currency', 'USD')  # ← Сохраняем валюту
         )
         db.add(product)
     else:
-        # Обновляем цену
+        # Обновляем цену и валюту
         product.current_price = product_data['price']
+        product.currency = product_data.get('currency', product.currency)
         product.updated_at = datetime.utcnow()
 
     db.commit()
@@ -159,11 +161,13 @@ class PriceParser:
 
         price = self.parse_price(html)
         name = self.parse_product_name(html)
+        currency = self.parse_currency(html)
 
         if price and name:
             return {
                 "name": name,
                 "price": price,
+                "currency": currency,
                 "url": self.url
             }
         return None
@@ -175,11 +179,25 @@ class GenericPriceParser(PriceParser):
     def parse_price(self, html: str) -> Optional[float]:
         soup = BeautifulSoup(html, 'html.parser')
 
-        # Популярные селекторы для цен
+        # Приоритетные селекторы для текущей цены
+        priority_selectors = [
+            '.price-current', '.ourprice', '.sale-price', '.special-price',
+            '[itemprop="price"]', '.price-final', '.actual-price'
+        ]
+
+        # Сначала ищем по приоритетным селекторам
+        for selector in priority_selectors:
+            element = soup.select_one(selector)
+            if element:
+                price_text = element.get_text(strip=True)
+                price = self._clean_price(price_text)
+                if price:
+                    return price
+
+        # Затем ищем по обычным селекторам
         price_selectors = [
-            '.price', '.product-price', '.ourprice', '.sale-price',
-            '[itemprop="price"]', '.price-current', '.product-price-value',
-            '.special-price', '.regular-price'
+            '.price', '.product-price', '.price-value', '.product-price-value',
+            '.regular-price', '.product-price-new'
         ]
 
         for selector in price_selectors:
@@ -191,10 +209,16 @@ class GenericPriceParser(PriceParser):
                     return price
 
         # Если не нашли по селекторам, ищем по паттерну
-        price_pattern = r'\$?\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)'
+        # Паттерн для цен: 2.54, 2,54, $2.54, 2.54 BYN
+        price_pattern = r'(\d+[.,]\d{2})\s*(?:BYN|RUB|USD|EUR|₽|\$|€)?'
         matches = re.findall(price_pattern, html)
+
         if matches:
-            return self._clean_price(matches[0])
+            price_str = matches[0].replace(',', '.')
+            try:
+                return float(price_str)
+            except ValueError:
+                pass
 
         return None
 
@@ -219,17 +243,75 @@ class GenericPriceParser(PriceParser):
         if not price_text:
             return None
 
-        # Удаляем всё кроме цифр, точек и запятых
-        cleaned = re.sub(r'[^\d.,]', '', price_text)
+        # Находим все числа в строке
+        import re
 
-        # Обрабатываем запятую как разделитель копеек
-        if ',' in cleaned and '.' in cleaned:
-            cleaned = cleaned.replace(',', '')
-        elif ',' in cleaned:
-            cleaned = cleaned.replace(',', '.')
+        # Паттерн для поиска цен: 2.54, 2,54, $2.54, 2.54 BYN и т.д.
+        price_pattern = r'(\d+[.,]\d{2})'
+        matches = re.findall(price_pattern, price_text)
 
-        try:
-            return float(cleaned)
-        except ValueError:
-            return None
+        if matches:
+            # Берём первое найденное число
+            price_str = matches[0]
+            # Заменяем запятую на точку
+            price_str = price_str.replace(',', '.')
 
+            try:
+                return float(price_str)
+            except ValueError:
+                return None
+
+        # Если не нашли десятичное число, ищем целые
+        price_pattern = r'(\d+)'
+        matches = re.findall(price_pattern, price_text)
+
+        if matches:
+            try:
+                return float(matches[0])
+            except ValueError:
+                return None
+
+        return None
+
+
+def parse_currency(self, html: str) -> str:
+    """Определяет валюту из HTML"""
+
+    soup = BeautifulSoup(html, 'html.parser')
+
+    # Популярные селекторы для валюты
+    currency_selectors = [
+        '.currency', '[itemprop="priceCurrency"]', '.price-currency',
+        '.symbol', '.currency-symbol'
+    ]
+
+    for selector in currency_selectors:
+        element = soup.select_one(selector)
+        if element:
+            currency_text = element.get_text(strip=True).upper()
+            if currency_text in ['BYN', 'RUB', 'USD', 'EUR', 'KZT', 'UAH']:
+                return currency_text
+
+    # Ищем в атрибутах
+    price_elements = soup.select('[itemprop="price"]')
+    for element in price_elements:
+        currency = element.get('content', '').upper()
+        if currency in ['BYN', 'RUB', 'USD', 'EUR', 'KZT', 'UAH']:
+            return currency
+
+    # Ищем по паттернам в тексте
+    currency_patterns = {
+        'BYN': r'\bBYN\b|\bбел\.\s?руб\.\b|\bruble\b',
+        'RUB': r'\bRUB\b|\bруб\.\b|\b₽\b',
+        'USD': r'\bUSD\b|\$\b',
+        'EUR': r'\bEUR\b|\b€\b',
+        'KZT': r'\bKZT\b|\b₸\b',
+        'UAH': r'\bUAH\b|\b₴\b'
+    }
+
+    for currency, pattern in currency_patterns.items():
+        if re.search(pattern, html, re.IGNORECASE):
+            return currency
+
+    # По умолчанию
+    return 'USD'

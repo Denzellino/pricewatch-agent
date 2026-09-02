@@ -196,13 +196,14 @@
                         <th>ID</th>
                         <th>Название</th>
                         <th>Текущая цена</th>
+                        <th>Валюта</th>
                         <th>URL</th>
                         <th>Действия</th>
                     </tr>
                 </thead>
                 <tbody id="products-table">
                     <tr>
-                        <td colspan="5" style="text-align: center;">Загрузка...</td>
+                        <td colspan="6" style="text-align: center;">Загрузка...</td>
                     </tr>
                 </tbody>
             </table>
@@ -252,6 +253,7 @@
                             <td>${product.id}</td>
                             <td>${product.product_name.substring(0, 50)}${product.product_name.length > 50 ? '...' : ''}</td>
                             <td>${product.current_price ? product.current_price.toFixed(2) : 'N/A'}</td>
+                            <td>${product.currency || 'USD'}</td>
                             <td><a href="${product.product_url}" target="_blank">🔗 Ссылка</a></td>
                             <td>
                                 <button class="btn btn-primary" onclick="viewHistory(${product.id})">История</button>
