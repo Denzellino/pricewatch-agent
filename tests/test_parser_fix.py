@@ -7,7 +7,7 @@ sys.path.insert(0, str(project_root))
 from app.parser import GenericPriceParser
 
 # Тестовый URL (замени на свой)
-test_url = "https://example.com/product/123"
+test_url = "https://avs.by/product/vvg-p-nga-315-n660vtu-rb-428"
 
 parser = GenericPriceParser(test_url)
 result = parser.get_product_data()

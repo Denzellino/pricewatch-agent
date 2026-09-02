@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Product, Store
-from app.parser import GenericPriceParser, save_product_data
+from app.parser_factory import ParserFactory
+from app.parser import save_product_data
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 from app.models import PriceHistory
 from sqlalchemy import desc
@@ -26,6 +27,7 @@ class ProductResponse(BaseModel):
     product_name: str
     product_url: str
     current_price: float
+    currency: Optional[str] = "USD"
     is_active: bool
 
     class Config:
@@ -41,12 +43,18 @@ def add_product(product_data: ProductCreate, db: Session = Depends(get_db)):
     if not store:
         raise HTTPException(status_code=404, detail="Store not found")
 
+    # Выбираем парсер через фабрику
+    parser = ParserFactory.get_parser(product_data.product_url)
+
     # Парсим данные
-    parser = GenericPriceParser(product_data.product_url)
     scraped_data = parser.get_product_data()
 
     if not scraped_data:
         raise HTTPException(status_code=400, detail="Failed to parse product data")
+
+    # Если валюта не определена, пробуем определить по домену
+    if 'currency' not in scraped_data or not scraped_data['currency']:
+        scraped_data['currency'] = ParserFactory.get_region_currency(product_data.product_url)
 
     # Сохраняем в БД
     product = save_product_data(db, scraped_data, product_data.store_id)

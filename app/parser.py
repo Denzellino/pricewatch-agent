@@ -1,7 +1,7 @@
+import re
 import requests
 from bs4 import BeautifulSoup
 from typing import Optional, Dict, Any
-import re
 
 from sqlalchemy.orm import Session
 from app.models import Product, PriceHistory, Alert
@@ -274,44 +274,100 @@ class GenericPriceParser(PriceParser):
         return None
 
 
-def parse_currency(self, html: str) -> str:
-    """Определяет валюту из HTML"""
+    def parse_currency(self, html: str) -> str:
+        """Определяет валюту из HTML"""
 
-    soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, 'html.parser')
 
-    # Популярные селекторы для валюты
-    currency_selectors = [
-        '.currency', '[itemprop="priceCurrency"]', '.price-currency',
-        '.symbol', '.currency-symbol'
-    ]
+        # Популярные селекторы для валюты
+        currency_selectors = [
+            '.currency', '[itemprop="priceCurrency"]', '.price-currency',
+            '.symbol', '.currency-symbol'
+        ]
 
-    for selector in currency_selectors:
-        element = soup.select_one(selector)
-        if element:
-            currency_text = element.get_text(strip=True).upper()
-            if currency_text in ['BYN', 'RUB', 'USD', 'EUR', 'KZT', 'UAH']:
-                return currency_text
+        for selector in currency_selectors:
+            element = soup.select_one(selector)
+            if element:
+                currency_text = element.get_text(strip=True).upper()
+                if currency_text in ['BYN', 'RUB', 'USD', 'EUR', 'KZT', 'UAH']:
+                    return currency_text
 
-    # Ищем в атрибутах
-    price_elements = soup.select('[itemprop="price"]')
-    for element in price_elements:
-        currency = element.get('content', '').upper()
-        if currency in ['BYN', 'RUB', 'USD', 'EUR', 'KZT', 'UAH']:
-            return currency
+        # Ищем в атрибутах
+        price_elements = soup.select('[itemprop="price"]')
+        for element in price_elements:
+            currency = element.get('content', '').upper()
+            if currency in ['BYN', 'RUB', 'USD', 'EUR', 'KZT', 'UAH']:
+                return currency
 
-    # Ищем по паттернам в тексте
-    currency_patterns = {
-        'BYN': r'\bBYN\b|\bбел\.\s?руб\.\b|\bruble\b',
-        'RUB': r'\bRUB\b|\bруб\.\b|\b₽\b',
-        'USD': r'\bUSD\b|\$\b',
-        'EUR': r'\bEUR\b|\b€\b',
-        'KZT': r'\bKZT\b|\b₸\b',
-        'UAH': r'\bUAH\b|\b₴\b'
-    }
+        # Ищем по паттернам в тексте
+        currency_patterns = {
+            'BYN': r'\bBYN\b|\bбел\.\s?руб\.\b|\bruble\b',
+            'RUB': r'\bRUB\b|\bруб\.\b|\b₽\b',
+            'USD': r'\bUSD\b|\$\b',
+            'EUR': r'\bEUR\b|\b€\b',
+            'KZT': r'\bKZT\b|\b₸\b',
+            'UAH': r'\bUAH\b|\b₴\b'
+        }
 
-    for currency, pattern in currency_patterns.items():
-        if re.search(pattern, html, re.IGNORECASE):
-            return currency
+        for currency, pattern in currency_patterns.items():
+            if re.search(pattern, html, re.IGNORECASE):
+                return currency
 
-    # По умолчанию
-    return 'USD'
+        # По умолчанию
+        return 'USD'
+
+
+class AVSPriceParser(GenericPriceParser):
+    """Специальный парсер для avs.by (Беларусь)"""
+
+    def parse_price(self, html: str) -> Optional[float]:
+        import re
+
+        # Ищем цену рядом с "руб" или "BYN"
+        price_pattern = r'(\d+[.,]\d{2})\s*(?:руб|BYN|бел\.\s*руб)'
+        matches = re.findall(price_pattern, html, re.IGNORECASE)
+
+        if matches:
+            # Берём первое найденное совпадение
+            price_str = matches[0].replace(',', '.')
+            try:
+                return float(price_str)
+            except ValueError:
+                pass
+
+        # Если не нашли, пробуем другие паттерны
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Специфичные селекторы для avs.by
+        price_selectors = [
+            '.product-price', '.price-value', '[data-price]',
+            '.cost', '.price-current', '.price-main', '.price-final'
+        ]
+
+        for selector in price_selectors:
+            element = soup.select_one(selector)
+            if element:
+                price_text = element.get_text(strip=True)
+                # Ищем число в формате 2,48 или 2.48
+                match = re.search(r'(\d+[.,]\d{2})', price_text)
+                if match:
+                    price_str = match.group(1).replace(',', '.')
+                    try:
+                        return float(price_str)
+                    except ValueError:
+                        pass
+
+        return None
+
+    def parse_currency(self, html: str) -> str:
+        import re
+
+        # Проверяем, есть ли "BYN" или "бел. руб." на странице
+        if re.search(r'\bBYN\b|\bбел\.\s*руб\.\b', html, re.IGNORECASE):
+            return 'BYN'
+
+        # Если есть "руб" но нет "BYN", всё равно возвращаем BYN (для avs.by)
+        if re.search(r'\bруб\b', html, re.IGNORECASE):
+            return 'BYN'
+
+        return 'USD'
