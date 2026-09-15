@@ -81,13 +81,13 @@ def check_price_changes(db: Session, product: Product, new_price: float, thresho
                 print(f"❌ Failed to send alert: {e}")
 
 
-def save_product_data(db: Session, product_data: Dict[str, Any], store_id: int) -> Product:
-    """Сохраняет или обновляет товар в БД"""
+def save_product_data(db: Session, product_data: Dict[str, Any], user_id: int) -> Product:
+    """Сохраняет или обновляет товар в БД (для пользователя)"""
 
     # Ищем существующий товар по URL
     product = db.query(Product).filter(
         Product.product_url == product_data['url'],
-        Product.store_id == store_id
+        Product.user_id == user_id  # ← Изменили store_id на user_id
     ).first()
 
     old_price = product.current_price if product else None
@@ -95,11 +95,56 @@ def save_product_data(db: Session, product_data: Dict[str, Any], store_id: int) 
     if not product:
         # Создаём новый товар
         product = Product(
-            store_id=store_id,
+            user_id=user_id,  # ← Изменили
             product_name=product_data['name'],
             product_url=product_data['url'],
             current_price=product_data['price'],
-            currency=product_data.get('currency', 'USD')  # ← Сохраняем валюту
+            currency=product_data.get('currency', 'USD')
+        )
+        db.add(product)
+    else:
+        # Обновляем цену и валюту
+        product.current_price = product_data['price']
+        product.currency = product_data.get('currency', product.currency)
+        product.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(product)
+
+    # Добавляем запись в историю цен
+    price_history = PriceHistory(
+        product_id=product.id,
+        price=product_data['price']
+    )
+    db.add(price_history)
+    db.commit()
+
+    # Проверяем изменение цены
+    if old_price:
+        check_price_changes(db, product, product_data['price'])
+
+    return product
+
+
+def save_product_data_for_user(db: Session, product_data: Dict[str, Any], user_id: int) -> Product:
+    """Сохраняет или обновляет товар для пользователя"""
+
+    # Ищем существующий товар по URL
+    product = db.query(Product).filter(
+        Product.product_url == product_data['url'],
+        Product.user_id == user_id  # ← Изменили store_id на user_id
+    ).first()
+
+    old_price = product.current_price if product else None
+
+    if not product:
+        # Создаём новый товар
+        product = Product(
+            user_id=user_id,  # ← Изменили
+            product_name=product_data['name'],
+            product_url=product_data['url'],
+            current_price=product_data['price'],
+            currency=product_data.get('currency', 'USD')
         )
         db.add(product)
     else:

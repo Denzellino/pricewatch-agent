@@ -5,23 +5,11 @@ from datetime import datetime
 Base = declarative_base()
 
 
-class Store(Base):
-    __tablename__ = "stores"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False)
-    store_name = Column(String(255), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    products = relationship("Product", back_populates="store", cascade="all, delete-orphan")
-
-
 class Product(Base):
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    store_id = Column(Integer, ForeignKey("stores.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)  # ← Изменили
     product_name = Column(String(500), nullable=False)
     product_url = Column(Text, nullable=False)
     target_price = Column(DECIMAL(10, 2), nullable=True)
@@ -31,7 +19,7 @@ class Product(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    store = relationship("Store", back_populates="products")
+    user = relationship("User", back_populates="products")  # ← Изменили
     price_history = relationship("PriceHistory", back_populates="product", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="product", cascade="all, delete-orphan")
 
@@ -64,7 +52,7 @@ class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     stripe_customer_id = Column(String(255), nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
     plan_name = Column(String(50), default="basic")
@@ -74,3 +62,25 @@ class Subscription(Base):
     current_period_end = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="subscription")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True)
+    is_superuser = Column(Boolean, default=False)
+    is_verified = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    products = relationship("Product", back_populates="user", cascade="all, delete-orphan")
+    subscription = relationship("Subscription", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<User {self.email}>"

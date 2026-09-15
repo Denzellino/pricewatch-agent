@@ -1,13 +1,16 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import Product, Store
-from app.parser_factory import ParserFactory
-from app.parser import save_product_data
-from pydantic import BaseModel
 from typing import List, Optional
+
+from app.database import get_db
+from app.models import Product, User, Subscription
+from app.parser_factory import ParserFactory
+from app.parser import save_product_data_for_user
+from app.utils.auth import get_current_active_user
+from pydantic import BaseModel
+
 
 from app.models import PriceHistory
 from sqlalchemy import desc
@@ -16,18 +19,18 @@ router = APIRouter(prefix="/products", tags=["products"])
 
 
 class ProductCreate(BaseModel):
-    store_id: int
     product_url: str
-    product_name: str = None
-    target_price: float = None
+    product_name: Optional[str] = None
+    target_price: Optional[float] = None
 
 
 class ProductResponse(BaseModel):
     id: int
+    user_id: int
     product_name: str
     product_url: str
-    current_price: float
-    currency: Optional[str] = "USD"
+    current_price: Optional[float]
+    currency: Optional[str]
     is_active: bool
 
     class Config:
@@ -35,42 +38,68 @@ class ProductResponse(BaseModel):
 
 
 @router.post("/", response_model=ProductResponse)
-def add_product(product_data: ProductCreate, db: Session = Depends(get_db)):
+def create_product(
+        product_data: ProductCreate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_active_user)
+):
     """Добавляет товар на мониторинг"""
 
-    # Проверяем, существует ли магазин
-    store = db.query(Store).filter(Store.id == product_data.store_id).first()
-    if not store:
-        raise HTTPException(status_code=404, detail="Store not found")
+    # Проверяем лимит товаров
+    subscription = db.query(Subscription).filter(
+        Subscription.user_id == current_user.id,
+        Subscription.is_active == True
+    ).first()
 
-    # Выбираем парсер через фабрику
+    max_products = subscription.max_products if subscription else 5  # Демо: 5 товаров
+
+    current_products_count = db.query(Product).filter(
+        Product.user_id == current_user.id,
+        Product.is_active == True
+    ).count()
+
+    if current_products_count >= max_products:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Product limit reached. Upgrade your plan to add more products."
+        )
+
+    # Выбираем парсер
     parser = ParserFactory.get_parser(product_data.product_url)
-
-    # Парсим данные
     scraped_data = parser.get_product_data()
 
     if not scraped_data:
         raise HTTPException(status_code=400, detail="Failed to parse product data")
 
-    # Если валюта не определена, пробуем определить по домену
+    # Определяем валюту
     if 'currency' not in scraped_data or not scraped_data['currency']:
         scraped_data['currency'] = ParserFactory.get_region_currency(product_data.product_url)
 
-    # Сохраняем в БД
-    product = save_product_data(db, scraped_data, product_data.store_id)
+    # Сохраняем
+    product_data_dict = {
+        **scraped_data,
+        'user_id': current_user.id
+    }
+
+    product = save_product_data_for_user(db, product_data_dict, current_user.id)
 
     return product
 
 
 @router.get("/", response_model=List[ProductResponse])
-def get_products(store_id: int = None, db: Session = Depends(get_db)):
-    """Получает список товаров"""
+def get_products(
+        skip: int = 0,
+        limit: int = 100,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_active_user)
+):
+    """Получает список товаров пользователя"""
 
-    query = db.query(Product)
-    if store_id:
-        query = query.filter(Product.store_id == store_id)
+    products = db.query(Product).filter(
+        Product.user_id == current_user.id
+    ).offset(skip).limit(limit).all()
 
-    return query.all()
+    return products
 
 
 class PriceHistoryResponse(BaseModel):
@@ -91,3 +120,4 @@ def get_price_history(product_id: int, db: Session = Depends(get_db)):
     ).order_by(desc(PriceHistory.scraped_at)).limit(100).all()
 
     return history
+

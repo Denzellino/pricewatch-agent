@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db
-from app.routes import products, stores, pages, payments
+from app.routes import products, pages, payments, auth, admin
 
 app = FastAPI(title="PriceWatch Agent API")
 
@@ -13,8 +13,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(pages.router)
-app.include_router(stores.router)
 app.include_router(products.router)
 app.include_router(payments.router)
 

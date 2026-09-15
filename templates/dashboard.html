@@ -143,180 +143,204 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>📊 Dashboard</h1>
-            <button class="refresh-btn" onclick="location.reload()">🔄 Обновить</button>
-        </header>
+<div class="container">
+    <header>
+        <h1>📊 Dashboard</h1>
+        <button class="refresh-btn" onclick="location.reload()">🔄 Обновить</button>
+    </header>
 
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-value" id="total-products">-</div>
-                <div class="stat-label">Товаров на мониторинге</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="total-stores">-</div>
-                <div class="stat-label">Магазинов</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="alerts-sent">-</div>
-                <div class="stat-label">Уведомлений отправлено</div>
-            </div>
+    <nav style="margin: 20px 0; padding: 10px; background: #f0f0f0; border-radius: 8px;">
+        <a href="/dashboard" style="margin-right: 15px; text-decoration: none; color: #667eea;">📊 Дашборд</a>
+        <a href="/pricing" style="margin-right: 15px; text-decoration: none; color: #667eea;">💎 Тарифы</a>
+        <button onclick="logout()" style="background: none; border: none; cursor: pointer; color: #667eea;">🚪 Выход</button>
+    </nav>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-value" id="total-products">-</div>
+            <div class="stat-label">Товаров на мониторинге</div>
         </div>
-
-        <div class="content">
-            <h2>📦 Товары</h2>
-
-            <div style="margin: 20px 0;">
-                <button class="btn btn-primary" onclick="document.getElementById('add-product-form').style.display='block'">
-                    + Добавить товар
-                </button>
-            </div>
-
-            <div id="add-product-form" style="display: none; background: #f9f9f9; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
-                <h3>Добавить новый товар</h3>
-                <form id="product-form">
-                    <div class="form-group">
-                        <label>Магазин:</label>
-                        <select id="store-select" required>
-                            <option value="">Загрузка...</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>URL товара:</label>
-                        <input type="url" id="product-url" placeholder="https://example.com/product/123" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Добавить</button>
-                </form>
-            </div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Название</th>
-                        <th>Текущая цена</th>
-                        <th>Валюта</th>
-                        <th>URL</th>
-                        <th>Действия</th>
-                    </tr>
-                </thead>
-                <tbody id="products-table">
-                    <tr>
-                        <td colspan="6" style="text-align: center;">Загрузка...</td>
-                    </tr>
-                </tbody>
-            </table>
+        <div class="stat-card">
+            <div class="stat-value" id="total-stores">-</div>
+            <div class="stat-label">Магазинов</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="alerts-sent">-</div>
+            <div class="stat-label">Уведомлений отправлено</div>
         </div>
     </div>
 
-    <script>
-        // API endpoints
-        const API_BASE = '';
+    <div class="content">
+        <h2>📦 Товары</h2>
 
-        // Загрузка данных
-        async function loadData() {
-            await loadStores();
-            await loadProducts();
-        }
+        <div style="margin: 20px 0;">
+            <button class="btn btn-primary" onclick="document.getElementById('add-product-form').style.display='block'">
+                + Добавить товар
+            </button>
+        </div>
 
-        // Загрузка магазинов
-        async function loadStores() {
-            try {
-                const response = await fetch(`${API_BASE}/stores/`);
-                const stores = await response.json();
+        <div id="add-product-form" style="display: none; ...">
+            <h3>Добавить новый товар</h3>
+            <form id="product-form">
+                <div class="form-group">
+                    <label>URL товара:</label>
+                    <input type="url" id="product-url" placeholder="https://example.com/product/123" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Добавить</button>
+            </form>
+        </div>
 
-                const select = document.getElementById('store-select');
-                select.innerHTML = stores.map(store =>
-                    `<option value="${store.id}">${store.store_name}</option>`
-                ).join('');
+        <table>
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Название</th>
+                <th>Текущая цена</th>
+                <th>Валюта</th>
+                <th>URL</th>
+                <th>Действия</th>
+            </tr>
+            </thead>
+            <tbody id="products-table">
+            <tr>
+                <td colspan="6" style="text-align: center;">Загрузка...</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
 
-                document.getElementById('total-stores').textContent = stores.length;
-            } catch (error) {
-                console.error('Error loading stores:', error);
-            }
-        }
+<script>
+    // API endpoints
+    const API_BASE = '';
 
-        // Загрузка товаров
-        async function loadProducts() {
-            try {
-                const response = await fetch(`${API_BASE}/products/`);
-                const products = await response.json();
+    function getToken() {
+        return localStorage.getItem('token');
+    }
 
-                const tbody = document.getElementById('products-table');
+    function getAuthHeaders() {
+        const token = getToken();
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
+    }
+    // Загрузка данных
+    async function loadData() {
+    const token = getToken();
 
-                if (products.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Нет товаров</td></tr>';
-                } else {
-                    tbody.innerHTML = products.map(product => `
-                        <tr>
-                            <td>${product.id}</td>
-                            <td>${product.product_name.substring(0, 50)}${product.product_name.length > 50 ? '...' : ''}</td>
-                            <td>${product.current_price ? product.current_price.toFixed(2) : 'N/A'}</td>
-                            <td>${product.currency || 'USD'}</td>
-                            <td><a href="${product.product_url}" target="_blank">🔗 Ссылка</a></td>
-                            <td>
-                                <button class="btn btn-primary" onclick="viewHistory(${product.id})">История</button>
-                                <button class="btn btn-danger" onclick="deleteProduct(${product.id})">Удалить</button>
-                            </td>
-                        </tr>
-                    `).join('');
-                }
+    if (!token) {
+        // Нет токена, перенаправляем на логин
+        window.location.href = '/login';
+        return;
+    }
 
-                document.getElementById('total-products').textContent = products.length;
-            } catch (error) {
-                console.error('Error loading products:', error);
-            }
-        }
-
-        // Добавление товара
-        document.getElementById('product-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const store_id = parseInt(document.getElementById('store-select').value);
-            const product_url = document.getElementById('product-url').value;
-
-            try {
-                const response = await fetch(`${API_BASE}/products/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        store_id: store_id,
-                        product_url: product_url
-                    })
-                });
-
-                if (response.ok) {
-                    alert('✅ Товар добавлен!');
-                    document.getElementById('add-product-form').style.display = 'none';
-                    document.getElementById('product-form').reset();
-                    loadProducts();
-                } else {
-                    const error = await response.json();
-                    alert('❌ Ошибка: ' + error.detail);
-                }
-            } catch (error) {
-                alert('❌ Ошибка: ' + error.message);
-            }
+    // Проверяем токен
+    try {
+        const response = await fetch(`${API_BASE}/auth/me`, {
+            headers: getAuthHeaders()
         });
 
-        // Просмотр истории
-        async function viewHistory(product_id) {
-            window.location.href = `/history/${product_id}`;
+        if (!response.ok) {
+            window.location.href = '/login';
+            return;
         }
 
-        // Удаление товара
-        async function deleteProduct(product_id) {
-            if (!confirm('Вы уверены?')) return;
+        const user = await response.json();
+        console.log('Logged in as:', user.email);
 
-            // TODO: Реализовать DELETE endpoint
-            alert('Функция в разработке');
+    } catch (error) {
+        window.location.href = '/login';
+        return;
+    }
+
+    await loadProducts();
+}
+
+    // Загрузка товаров
+    async function loadProducts() {
+        try {
+            const response = await fetch(`${API_BASE}/products/`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.status === 401) {
+            // Токен истёк, перенаправляем на логин
+            window.location.href = '/login';
+            return;
         }
+            const products = await response.json();
 
-        // Загрузка при старте
-        loadData();
-    </script>
+            const tbody = document.getElementById('products-table');
+
+            if (products.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Нет товаров</td></tr>';
+            } else {
+                tbody.innerHTML = products.map(product => `
+                    <tr>
+                        <td>${product.id}</td>
+                        <td>${product.product_name.substring(0, 50)}${product.product_name.length > 50 ? '...' : ''}</td>
+                        <td>${product.current_price ? product.current_price.toFixed(2) : 'N/A'}</td>
+                        <td>${product.currency || 'USD'}</td>
+                        <td><a href="${product.product_url}" target="_blank">🔗 Ссылка</a></td>
+                        <td>
+                            <button class="btn btn-primary" onclick="viewHistory(${product.id})">История</button>
+                            <button class="btn btn-danger" onclick="deleteProduct(${product.id})">Удалить</button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            document.getElementById('total-products').textContent = products.length;
+        } catch (error) {
+            console.error('Error loading products:', error);
+        }
+    }
+
+    // Добавление товара
+    document.getElementById('product-form').addEventListener('submit', async (e) => {
+e.preventDefault();
+
+    const product_url = document.getElementById('product-url').value;
+
+    try {
+    const response = await fetch(`${API_BASE}/products/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+        product_url: product_url
+    })
+});
+
+    if (response.ok) {
+        alert('✅ Товар добавлен!');
+        document.getElementById('add-product-form').style.display = 'none';
+        document.getElementById('product-form').reset();
+        loadProducts();
+    } else {
+        const error = await response.json();
+        alert('❌ Ошибка: ' + error.detail);
+    }
+} catch (error) {
+    alert('❌ Ошибка: ' + error.message);
+}
+});
+
+    // Просмотр истории
+    async function viewHistory(product_id) {
+        window.location.href = `/history/${product_id}`;
+    }
+
+    // Удаление товара
+    async function deleteProduct(product_id) {
+        if (!confirm('Вы уверены?')) return;
+
+        // TODO: Реализовать DELETE endpoint
+        alert('Функция в разработке');
+    }
+
+    // Загрузка при старте
+    loadData();
+</script>
 </body>
 </html>

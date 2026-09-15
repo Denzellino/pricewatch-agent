@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Тарифы - PriceWatch Agent</title>
+    <title>Тарифы - PriceWatch</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            padding: 20px;
+            background: #f5f7fa;
+            min-height: 100vh;
+            padding: 40px 20px;
         }
 
         .container {
@@ -18,36 +19,42 @@
 
         h1 {
             text-align: center;
-            margin-bottom: 40px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 50px;
         }
 
         .pricing-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 30px;
-            margin-top: 40px;
+            margin-bottom: 50px;
         }
 
         .pricing-card {
             background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            border-radius: 15px;
+            padding: 40px 30px;
             text-align: center;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
             transition: transform 0.3s;
         }
 
         .pricing-card:hover {
-            transform: translateY(-10px);
+            transform: translateY(-5px);
         }
 
-        .pricing-card.featured {
-            border: 2px solid #667eea;
+        .pricing-card.popular {
+            border: 3px solid #667eea;
             position: relative;
         }
 
-        .pricing-card.featured::before {
-            content: "Популярный";
+        .popular-badge {
             position: absolute;
             top: -15px;
             left: 50%;
@@ -57,38 +64,50 @@
             padding: 5px 20px;
             border-radius: 20px;
             font-size: 0.9rem;
+            font-weight: bold;
         }
 
         .plan-name {
             font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .price {
+            font-size: 3rem;
+            font-weight: bold;
             color: #667eea;
             margin-bottom: 10px;
         }
 
-        .plan-price {
-            font-size: 3rem;
-            font-weight: bold;
-            color: #333;
-        }
-
-        .plan-price span {
+        .price span {
             font-size: 1rem;
-            color: #666;
+            color: #999;
         }
 
-        .plan-features {
+        .features {
             list-style: none;
+            padding: 0;
             margin: 30px 0;
             text-align: left;
         }
 
-        .plan-features li {
+        .features li {
             padding: 10px 0;
             border-bottom: 1px solid #eee;
+            color: #555;
         }
 
-        .plan-features li:last-child {
+        .features li:last-child {
             border-bottom: none;
+        }
+
+        .features li::before {
+            content: "✓";
+            color: #4ade80;
+            font-weight: bold;
+            margin-right: 10px;
         }
 
         .btn {
@@ -97,7 +116,7 @@
             background: #667eea;
             color: white;
             text-decoration: none;
-            border-radius: 50px;
+            border-radius: 8px;
             font-weight: bold;
             transition: background 0.3s;
             border: none;
@@ -119,81 +138,168 @@
             background: #667eea;
             color: white;
         }
+
+        .current-plan {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .current-plan h3 {
+            margin: 0 0 10px 0;
+            color: #92400e;
+        }
+
+        .current-plan p {
+            margin: 0;
+            color: #78350f;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>💳 Выберите тариф</h1>
+        <h1>💎 Тарифные планы</h1>
+        <p class="subtitle">Выберите план, который подходит именно вам</p>
+
+        <div id="current-plan-container"></div>
 
         <div class="pricing-grid">
+            <!-- Demo -->
             <div class="pricing-card">
-                <div class="plan-name">Basic</div>
-                <div class="plan-price">$29<span>/мес</span></div>
-                <ul class="plan-features">
-                    <li>✅ До 50 товаров</li>
-                    <li>✅ Проверка каждые 30 минут</li>
-                    <li>✅ Telegram-уведомления</li>
-                    <li>✅ История цен</li>
-                    <li>❌ Приоритетная поддержка</li>
+                <div class="plan-name">🆓 Demo</div>
+                <div class="price">0₽<span>/мес</span></div>
+                <ul class="features">
+                    <li>До 5 товаров</li>
+                    <li>Проверка раз в 24 часа</li>
+                    <li>Telegram уведомления</li>
+                    <li>Базовая аналитика</li>
                 </ul>
-                <button class="btn btn-outline" onclick="selectPlan('basic')">Выбрать</button>
+                <button class="btn btn-outline" onclick="selectPlan('demo')">Текущий план</button>
             </div>
 
-            <div class="pricing-card featured">
-                <div class="plan-name">Pro</div>
-                <div class="plan-price">$79<span>/мес</span></div>
-                <ul class="plan-features">
-                    <li>✅ До 200 товаров</li>
-                    <li>✅ Проверка каждые 15 минут</li>
-                    <li>✅ Telegram-уведомления</li>
-                    <li>✅ История цен</li>
-                    <li>✅ Приоритетная поддержка</li>
+            <!-- Basic -->
+            <div class="pricing-card">
+                <div class="plan-name">🥉 Basic</div>
+                <div class="price">490₽<span>/мес</span></div>
+                <ul class="features">
+                    <li>До 50 товаров</li>
+                    <li>Проверка раз в 12 часов</li>
+                    <li>Telegram уведомления</li>
+                    <li>История цен (30 дней)</li>
+                    <li>Email поддержка</li>
+                </ul>
+                <button class="btn" onclick="selectPlan('basic')">Выбрать</button>
+            </div>
+
+            <!-- Pro -->
+            <div class="pricing-card popular">
+                <div class="popular-badge">Популярный</div>
+                <div class="plan-name">🥈 Pro</div>
+                <div class="price">990₽<span>/мес</span></div>
+                <ul class="features">
+                    <li>До 200 товаров</li>
+                    <li>Проверка раз в 6 часов</li>
+                    <li>Telegram уведомления</li>
+                    <li>История цен (90 дней)</li>
+                    <li>Приоритетная поддержка</li>
+                    <li>API доступ</li>
                 </ul>
                 <button class="btn" onclick="selectPlan('pro')">Выбрать</button>
             </div>
 
+            <!-- Enterprise -->
             <div class="pricing-card">
-                <div class="plan-name">Enterprise</div>
-                <div class="plan-price">$199<span>/мес</span></div>
-                <ul class="plan-features">
-                    <li>✅ До 1000 товаров</li>
-                    <li>✅ Проверка каждые 5 минут</li>
-                    <li>✅ Telegram-уведомления</li>
-                    <li>✅ История цен</li>
-                    <li>✅ Приоритетная поддержка</li>
+                <div class="plan-name">🥇 Enterprise</div>
+                <div class="price">2490₽<span>/мес</span></div>
+                <ul class="features">
+                    <li>До 1000 товаров</li>
+                    <li>Проверка раз в 1 час</li>
+                    <li>Telegram + Email уведомления</li>
+                    <li>Полная история цен</li>
+                    <li>Персональный менеджер</li>
+                    <li>API доступ</li>
+                    <li>White-label решение</li>
                 </ul>
-                <button class="btn btn-outline" onclick="selectPlan('enterprise')">Выбрать</button>
+                <button class="btn" onclick="selectPlan('enterprise')">Выбрать</button>
             </div>
         </div>
     </div>
 
     <script>
-        async function selectPlan(plan) {
-            const user_id = 123456789; // Замени на реальный user_id
+        const API_BASE = '';
+
+        function getToken() {
+            return localStorage.getItem('token');
+        }
+
+        async function loadCurrentPlan() {
+            const token = getToken();
+
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
 
             try {
-                const response = await fetch('/payments/create-checkout', {
-                    method: 'POST',
+                const response = await fetch(`${API_BASE}/auth/me`, {
                     headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        user_id: user_id,
-                        plan: plan
-                    })
+                        'Authorization': `Bearer ${token}`
+                    }
                 });
 
-                if (response.ok) {
-                    const data = await response.json();
-                    window.location.href = data.checkout_url;
-                } else {
-                    const error = await response.json();
-                    alert('Ошибка: ' + error.detail);
+                if (!response.ok) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const user = await response.json();
+
+                if (user.subscription) {
+                    const planNames = {
+                        'demo': '🆓 Demo',
+                        'basic': '🥉 Basic',
+                        'pro': '🥈 Pro',
+                        'enterprise': '🥇 Enterprise'
+                    };
+
+                    document.getElementById('current-plan-container').innerHTML = `
+                        <div class="current-plan">
+                            <h3>Ваш текущий план: ${planNames[user.subscription.plan_type] || user.subscription.plan_type}</h3>
+                            <p>Действует до: ${new Date(user.subscription.expires_at).toLocaleDateString('ru-RU')}</p>
+                        </div>
+                    `;
                 }
             } catch (error) {
-                alert('Ошибка: ' + error.message);
+                console.error('Error loading plan:', error);
             }
         }
+
+        async function selectPlan(planType) {
+            const token = getToken();
+
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            if (planType === 'demo') {
+                alert('ℹ️ Вы уже используете Demo план. Выберите другой тариф для апгрейда.');
+                return;
+            }
+
+            // Здесь будет интеграция с платежной системой
+            // Пока просто показываем сообщение
+            alert(`🚀 Вы выбрали план ${planType.toUpperCase()}!\n\nСейчас вы будете перенаправлены на страницу оплаты...`);
+
+            // TODO: Интеграция с платежкой
+            // window.location.href = `/payment?plan=${planType}`;
+        }
+
+        // Загружаем текущий план
+        loadCurrentPlan();
     </script>
 </body>
 </html>

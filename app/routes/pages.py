@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Product, Store
+from app.models import Product
+from app.models import User
 
 router = APIRouter(tags=["pages"])
 
@@ -37,7 +38,17 @@ async def product_history(request: Request, product_id: int, db: Session = Depen
         "product_id": product_id
     })
 
+@router.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """Страница входа"""
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@router.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    """Страница регистрации"""
+    return templates.TemplateResponse("register.html", {"request": request})
+
 @router.get("/pricing", response_class=HTMLResponse)
-async def pricing(request: Request):
+async def pricing_page(request: Request):
     """Страница тарифов"""
     return templates.TemplateResponse("pricing.html", {"request": request})
