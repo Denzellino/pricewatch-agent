@@ -52,3 +52,8 @@ async def register_page(request: Request):
 async def pricing_page(request: Request):
     """Страница тарифов"""
     return templates.TemplateResponse("pricing.html", {"request": request})
+
+@router.get("/about", response_class=HTMLResponse)
+async def about_page(request: Request):
+    """Страница о проекте"""
+    return templates.TemplateResponse("about.html", {"request": request})

@@ -1,29 +1,48 @@
-# PriceWatch Agent
+# 🔍 PriceWatch Agent
 
-AI-powered competitor price monitoring SaaS with Telegram alerts.
+**Версия:** 0.1.0
 
-## Features
+Автоматическая система мониторинга цен конкурентов для e-commerce с уведомлениями в Telegram.
 
-- Automated price scraping from competitor websites
-- Real-time Telegram alerts for price changes
-- Price history tracking and analytics
-- Multi-store support
+## 🚀 Возможности
 
-## Tech Stack
+- ✅ Авторизация и регистрация (JWT)
+- ✅ Управление товарами через дашборд
+- ✅ Автоматический парсинг цен
+- ✅ Уведомления в Telegram
+- ✅ 4 тарифных плана (Demo, Basic, Pro, Enterprise)
+- ✅ REST API
 
-- Backend: FastAPI
-- Database: SQLite/PostgreSQL
-- Telegram Bot: python-telegram-bot
-- Scheduler: APScheduler
-- Deployment: Railway/Render
+## 🛠 Технологии
 
-## Setup
+- **Backend:** Python 3.13, FastAPI, SQLAlchemy, Pydantic
+- **Frontend:** HTML5, CSS3, Vanilla JavaScript
+- **Database:** SQLite (dev), PostgreSQL (prod)
+- **Security:** JWT, bcrypt
 
-1. Clone the repository
-2. Install dependencies: `pip install -r requirements.txt`
-3. Configure `.env` file with your API keys
-4. Run: `uvicorn app.main:app --reload`
+## 📦 Установка
 
-## License
+```bash
+# Клонирование
+git clone [https://github.com/твой-username/pricewatch-agent.git](https://github.com/твой-username/pricewatch-agent.git)
+cd pricewatch-agent
+
+# Установка зависимостей
+pip install -r requirements.txt
+
+# Запуск
+uvicorn app.main:app --reload
+```
+
+## 🔑 Первый вход
+
+- **Email:** admin@pricewatch.com
+- **Пароль:** admin123
+
+## 📚 Документация API
+
+После запуска открой: http://127.0.0.1:8000/docs
+
+## 📄 Лицензия
 
 MIT

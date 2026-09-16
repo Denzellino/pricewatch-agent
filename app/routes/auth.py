@@ -101,3 +101,33 @@ def login(
 def get_me(current_user: User = Depends(get_current_user)):
     """Получить информацию о текущем пользователе"""
     return current_user
+
+
+@router.get("/me", response_model=UserResponse)
+def get_current_user_info(
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+):
+    """Возвращает информацию о текущем пользователе"""
+
+    # Получаем подписку пользователя
+    subscription = db.query(Subscription).filter(
+        Subscription.user_id == current_user.id,
+        Subscription.is_active == True
+    ).first()
+
+    # Преобразуем в dict
+    user_data = {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "is_active": current_user.is_active,
+        "is_superuser": current_user.is_superuser,
+        "subscription": {
+            "plan_type": subscription.plan_type if subscription else "demo",
+            "max_products": subscription.max_products if subscription else 5,
+            "expires_at": subscription.expires_at.isoformat() if subscription else None
+        } if subscription else None
+    }
+
+    return user_data
