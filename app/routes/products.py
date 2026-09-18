@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.database import get_db
-from app.models import Product, User, Subscription
+from app.models import PriceHistory, Product, User, Subscription
 from app.parser_factory import ParserFactory
 from app.parser import save_product_data_for_user
 from app.utils.auth import get_current_active_user
@@ -111,13 +111,36 @@ class PriceHistoryResponse(BaseModel):
         from_attributes = True
 
 
-@router.get("/{product_id}/history", response_model=List[PriceHistoryResponse])
-def get_price_history(product_id: int, db: Session = Depends(get_db)):
-    """Получает историю цен для товара"""
+@router.get(
+    "/{product_id}/history",
+    response_model=List[PriceHistoryResponse],
+)
+def get_price_history(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Получает историю цен только своего товара."""
 
-    history = db.query(PriceHistory).filter(
-        PriceHistory.product_id == product_id
-    ).order_by(desc(PriceHistory.scraped_at)).limit(100).all()
+    product = (
+        db.query(Product)
+        .filter(
+            Product.id == product_id,
+            Product.user_id == current_user.id,
+        )
+        .first()
+    )
 
-    return history
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found",
+        )
 
+    return (
+        db.query(PriceHistory)
+        .filter(PriceHistory.product_id == product_id)
+        .order_by(desc(PriceHistory.scraped_at))
+        .limit(100)
+        .all()
+    )

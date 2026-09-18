@@ -54,6 +54,7 @@ class Subscription(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     stripe_customer_id = Column(String(255), nullable=True)
+    stripe_checkout_session_id = Column(String(255), unique=True, nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
     plan_name = Column(String(50), default="basic")
     max_products = Column(Integer, default=50)

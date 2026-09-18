@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Subscription, User
+from app.utils.auth import get_current_active_user
 from pydantic import BaseModel
 from typing import Optional, List
 import stripe
@@ -17,8 +18,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 
 class CheckoutRequest(BaseModel):
-    user_id: int
-    plan: str = "basic"  # basic, pro, enterprise
+    plan: str = "basic"
 
 
 class CheckoutResponse(BaseModel):
@@ -27,7 +27,11 @@ class CheckoutResponse(BaseModel):
 
 
 @router.post("/create-checkout", response_model=CheckoutResponse)
-def create_checkout_session(request_data: CheckoutRequest, db: Session = Depends(get_db)):
+def create_checkout_session(
+    request_data: CheckoutRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
     """Создаёт Stripe Checkout сессию"""
 
     # Определяем цены
@@ -55,13 +59,20 @@ def create_checkout_session(request_data: CheckoutRequest, db: Session = Depends
     plan = plans[request_data.plan]
 
     # Проверяем, есть ли уже активная подписка
-    existing_subscription = db.query(Subscription).filter(
-        Subscription.user_id == request_data.user_id,
-        Subscription.is_active == True
-    ).first()
+    existing_subscription = (
+        db.query(Subscription)
+        .filter(
+            Subscription.user_id == current_user.id,
+            Subscription.is_active.is_(True),
+        )
+        .first()
+    )
 
     if existing_subscription:
         raise HTTPException(status_code=400, detail="Active subscription already exists")
+
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
 
     # Создаём Stripe Checkout сессию
     try:
@@ -84,7 +95,7 @@ def create_checkout_session(request_data: CheckoutRequest, db: Session = Depends
             success_url=f"{FRONTEND_URL}/payments/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{FRONTEND_URL}/payments/cancel",
             metadata={
-                "user_id": str(request_data.user_id),
+                "user_id": str(current_user.id),
                 "plan": request_data.plan
             }
         )
@@ -94,8 +105,9 @@ def create_checkout_session(request_data: CheckoutRequest, db: Session = Depends
             session_id=checkout_session.id
         )
 
-    except stripe.error.StripeError as e:
-        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+    except stripe.error.StripeError as exc:
+        raise HTTPException(status_code=502, detail="Stripe request failed") from exc
 
 
 @router.get("/success")
@@ -117,13 +129,28 @@ def payment_success(session_id: str, db: Session = Depends(get_db)):
             }
 
             # Создаём подписку в БД
+            existing_subscription = (
+                db.query(Subscription)
+                .filter(
+                    Subscription.stripe_checkout_session_id == session.id,
+                )
+                .first()
+            )
+
+            if existing_subscription:
+                return {
+                    "status": "success",
+                    "message": "Payment already processed",
+                }
+
             subscription = Subscription(
                 user_id=user_id,
+                stripe_checkout_session_id=session.id,
                 stripe_customer_id=session.customer,
                 stripe_subscription_id=session.subscription,
                 plan_name=plan,
                 max_products=plans.get(plan, 50),
-                is_active=True
+                is_active=True,
             )
 
             db.add(subscription)
@@ -178,14 +205,19 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     return {"status": "success"}
 
 
-@router.get("/subscription/{user_id}")
-def get_user_subscription(user_id: int, db: Session = Depends(get_db)):
-    """Получает информацию о подписке пользователя"""
-
-    subscription = db.query(Subscription).filter(
-        Subscription.user_id == user_id,
-        Subscription.is_active == True
-    ).first()
+@router.get("/subscription")
+def get_user_subscription(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    subscription = (
+        db.query(Subscription)
+        .filter(
+            Subscription.user_id == current_user.id,
+            Subscription.is_active.is_(True),
+        )
+        .first()
+    )
 
     if not subscription:
         return {"active": False}
@@ -194,5 +226,5 @@ def get_user_subscription(user_id: int, db: Session = Depends(get_db)):
         "active": True,
         "plan": subscription.plan_name,
         "max_products": subscription.max_products,
-        "current_period_end": subscription.current_period_end
+        "current_period_end": subscription.current_period_end,
     }

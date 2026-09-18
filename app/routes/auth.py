@@ -3,13 +3,13 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from app.database import get_db
-from app.models import User
+from app.models import User, Subscription
 from app.utils.auth import (
     verify_password,
     get_password_hash,
     create_access_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
-    get_current_user
+    get_current_active_user,
 )
 from pydantic import BaseModel, EmailStr
 from typing import Optional
@@ -37,6 +37,22 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class SubscriptionResponse(BaseModel):
+    plan_type: str
+    max_products: int
+    expires_at: Optional[str] = None
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    full_name: Optional[str]
+    is_active: bool
+    is_superuser: bool
+    subscription: Optional[SubscriptionResponse] = None
+
+    class Config:
+        from_attributes = True
 
 
 @router.post("/register", response_model=UserResponse)
@@ -98,36 +114,36 @@ def login(
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)):
-    """Получить информацию о текущем пользователе"""
-    return current_user
-
-
-@router.get("/me", response_model=UserResponse)
 def get_current_user_info(
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
-    """Возвращает информацию о текущем пользователе"""
+    subscription = (
+        db.query(Subscription)
+        .filter(
+            Subscription.user_id == current_user.id,
+            Subscription.is_active.is_(True),
+        )
+        .first()
+    )
 
-    # Получаем подписку пользователя
-    subscription = db.query(Subscription).filter(
-        Subscription.user_id == current_user.id,
-        Subscription.is_active == True
-    ).first()
-
-    # Преобразуем в dict
-    user_data = {
+    return {
         "id": current_user.id,
         "email": current_user.email,
         "full_name": current_user.full_name,
         "is_active": current_user.is_active,
         "is_superuser": current_user.is_superuser,
-        "subscription": {
-            "plan_type": subscription.plan_type if subscription else "demo",
-            "max_products": subscription.max_products if subscription else 5,
-            "expires_at": subscription.expires_at.isoformat() if subscription else None
-        } if subscription else None
+        "subscription": (
+            {
+                "plan_type": subscription.plan_type,
+                "max_products": subscription.max_products,
+                "expires_at": (
+                    subscription.expires_at.isoformat()
+                    if subscription.expires_at
+                    else None
+                ),
+            }
+            if subscription
+            else None
+        ),
     }
-
-    return user_data

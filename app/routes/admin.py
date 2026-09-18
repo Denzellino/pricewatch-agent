@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User
-from app.models import Subscription
+from app.models import Product, Subscription, User
 from app.utils.auth import get_current_superuser
 from pydantic import BaseModel
 from typing import List
@@ -83,9 +82,9 @@ def get_stats(
     """Статистика платформы (только админ)"""
 
     total_users = db.query(User).count()
-    active_users = db.query(User).filter(User.is_active == True).count()
+    active_users = db.query(User).filter(User.is_active.is_(True)).count()
     total_products = db.query(Product).count()
-    paid_subscriptions = db.query(Subscription).filter(Subscription.is_active == True).count()
+    paid_subscriptions = db.query(Subscription).filter(Subscription.is_active.is_(True)).count()
 
     return {
         "total_users": total_users,
