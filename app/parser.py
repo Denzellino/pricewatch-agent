@@ -43,130 +43,101 @@ async def send_price_alert(chat_id: str, product_name: str, old_price: float, ne
     await bot.shutdown()
 
 
-def check_price_changes(db: Session, product: Product, new_price: float, threshold: float = 10.0):
-    """Проверяет изменение цены и отправляет уведомления"""
-
-    old_price = product.current_price
-
-    if isinstance(new_price, Decimal):
-        new_price_raw = new_price
-    else:
-        # лучше через строку, чтобы избежать проблем float -> Decimal
-        new_price_raw = Decimal(str(new_price))
-
-    if not old_price:
+def check_price_changes(
+    db: Session,
+    product: Product,
+    old_price,
+    new_price,
+    threshold: float = 10.0,
+):
+    if old_price is None or new_price is None:
         return
 
-    change_percent = abs((new_price_raw - old_price) / old_price) * 100
+    old_price = Decimal(str(old_price))
+    new_price = Decimal(str(new_price))
 
-    if change_percent >= threshold:
-        # Находим все активные алерты для этого товара
-        alerts = db.query(Alert).filter(
-            Alert.product_id == product.id,
-            Alert.is_active == True
-        ).all()
+    if old_price == 0:
+        return
 
-        # Отправляем уведомления
-        for alert in alerts:
-            try:
-                asyncio.run(send_price_alert(
+    change_percent = abs((new_price - old_price) / old_price) * Decimal("100")
+
+    alerts = db.query(Alert).filter(
+        Alert.product_id == product.id,
+        Alert.is_active.is_(True),
+    ).all()
+
+    for alert in alerts:
+        alert_threshold = Decimal(
+            str(alert.threshold_percent or threshold)
+        )
+
+        if change_percent < alert_threshold:
+            continue
+
+        try:
+            asyncio.run(
+                send_price_alert(
                     chat_id=alert.telegram_chat_id,
                     product_name=product.product_name,
-                    old_price=old_price,
-                    new_price=new_price,
-                    product_url=product.product_url
-                ))
-                print(f"✅ Alert sent to {alert.telegram_chat_id}")
-            except Exception as e:
-                print(f"❌ Failed to send alert: {e}")
+                    old_price=float(old_price),
+                    new_price=float(new_price),
+                    product_url=product.product_url,
+                )
+            )
+            print(f"✅ Alert sent to {alert.telegram_chat_id}")
+        except Exception as e:
+            print(f"❌ Failed to send alert: {e}")
 
 
-def save_product_data(db: Session, product_data: Dict[str, Any], user_id: int) -> Product:
-    """Сохраняет или обновляет товар в БД (для пользователя)"""
+def save_product_data(
+    db: Session,
+    product_data: Dict[str, Any],
+    user_id: int,
+) -> Product:
+    url = product_data["url"]
+    new_price = Decimal(str(product_data["price"]))
 
-    # Ищем существующий товар по URL
     product = db.query(Product).filter(
-        Product.product_url == product_data['url'],
-        Product.user_id == user_id  # ← Изменили store_id на user_id
+        Product.product_url == url,
+        Product.user_id == user_id,
     ).first()
 
     old_price = product.current_price if product else None
 
-    if not product:
-        # Создаём новый товар
+    if product is None:
         product = Product(
-            user_id=user_id,  # ← Изменили
-            product_name=product_data['name'],
-            product_url=product_data['url'],
-            current_price=product_data['price'],
-            currency=product_data.get('currency', 'USD')
+            user_id=user_id,
+            product_name=product_data["name"],
+            product_url=url,
+            current_price=new_price,
+            currency=product_data.get("currency", "USD"),
         )
         db.add(product)
+        db.flush()
     else:
-        # Обновляем цену и валюту
-        product.current_price = product_data['price']
-        product.currency = product_data.get('currency', product.currency)
+        product.product_name = product_data["name"]
+        product.current_price = new_price
+        product.currency = product_data.get(
+            "currency",
+            product.currency or "USD",
+        )
         product.updated_at = datetime.utcnow()
 
-    db.commit()
-    db.refresh(product)
-
-    # Добавляем запись в историю цен
     price_history = PriceHistory(
         product_id=product.id,
-        price=product_data['price']
+        price=new_price,
     )
     db.add(price_history)
     db.commit()
-
-    # Проверяем изменение цены
-    if old_price:
-        check_price_changes(db, product, product_data['price'])
-
-    return product
-
-
-def save_product_data_for_user(db: Session, product_data: Dict[str, Any], user_id: int) -> Product:
-    """Сохраняет или обновляет товар для пользователя"""
-
-    # Ищем существующий товар по URL
-    product = db.query(Product).filter(
-        Product.product_url == product_data['url'],
-        Product.user_id == user_id  # ← Изменили store_id на user_id
-    ).first()
-
-    old_price = product.current_price if product else None
-
-    if not product:
-        # Создаём новый товар
-        product = Product(
-            user_id=user_id,  # ← Изменили
-            product_name=product_data['name'],
-            product_url=product_data['url'],
-            current_price=product_data['price'],
-            currency=product_data.get('currency', 'USD')
-        )
-        db.add(product)
-    else:
-        # Обновляем цену и валюту
-        product.current_price = product_data['price']
-        product.currency = product_data.get('currency', product.currency)
-        product.updated_at = datetime.utcnow()
-
-    db.commit()
     db.refresh(product)
 
-    # Добавляем запись в историю цен
-    price_history = PriceHistory(
-        product_id=product.id,
-        price=product_data['price']
-    )
-    db.add(price_history)
-    db.commit()
-
-    # Проверяем изменение цены
-    if old_price:
-        check_price_changes(db, product, product_data['price'])
+    if old_price is not None:
+        check_price_changes(
+            db=db,
+            product=product,
+            old_price=old_price,
+            new_price=new_price,
+        )
 
     return product
 
@@ -208,7 +179,7 @@ class PriceParser:
         name = self.parse_product_name(html)
         currency = self.parse_currency(html)
 
-        if price and name:
+        if price is not None and name:
             return {
                 "name": name,
                 "price": price,
@@ -325,17 +296,18 @@ class GenericPriceParser(PriceParser):
         soup = BeautifulSoup(html, 'html.parser')
 
         # Популярные селекторы для валюты
-        currency_selectors = [
-            '.currency', '[itemprop="priceCurrency"]', '.price-currency',
-            '.symbol', '.currency-symbol'
-        ]
+        currency_element = soup.select_one(
+            '[itemprop="priceCurrency"]'
+        )
 
-        for selector in currency_selectors:
-            element = soup.select_one(selector)
-            if element:
-                currency_text = element.get_text(strip=True).upper()
-                if currency_text in ['BYN', 'RUB', 'USD', 'EUR', 'KZT', 'UAH']:
-                    return currency_text
+        if currency_element:
+            currency = (
+                    currency_element.get("content")
+                    or currency_element.get_text(strip=True)
+            ).upper()
+
+            if currency in {"BYN", "RUB", "USD", "EUR", "KZT", "UAH"}:
+                return currency
 
         # Ищем в атрибутах
         price_elements = soup.select('[itemprop="price"]')

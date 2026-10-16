@@ -40,7 +40,7 @@ class Alert(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
-    telegram_chat_id = Column(String(100), nullable=False)
+    telegram_chat_id = Column(String(100), unique=True, nullable=True, index=True)
     threshold_percent = Column(DECIMAL(5, 2), default=10.00)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)

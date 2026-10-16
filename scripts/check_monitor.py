@@ -35,7 +35,7 @@ try:
             print(f"   Price: {scraped_data['price']}")
 
             # Сохраняем
-            updated_product = save_product_data(db, scraped_data, product.store_id)
+            updated_product = save_product_data(db, scraped_data, product.user_id)
             print(f"\n✅ Product updated in database")
         else:
             print("❌ Failed to scrape product data")

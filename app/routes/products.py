@@ -7,7 +7,7 @@ from typing import List, Optional
 from app.database import get_db
 from app.models import PriceHistory, Product, User, Subscription
 from app.parser_factory import ParserFactory
-from app.parser import save_product_data_for_user
+from app.parser import save_product_data
 from app.utils.auth import get_current_active_user
 from pydantic import BaseModel
 
@@ -72,16 +72,17 @@ def create_product(
         raise HTTPException(status_code=400, detail="Failed to parse product data")
 
     # Определяем валюту
-    if 'currency' not in scraped_data or not scraped_data['currency']:
-        scraped_data['currency'] = ParserFactory.get_region_currency(product_data.product_url)
+    if not scraped_data.get("currency"):
+        scraped_data["currency"] = ParserFactory.get_region_currency(
+            product_data.product_url
+        )
 
-    # Сохраняем
-    product_data_dict = {
-        **scraped_data,
-        'user_id': current_user.id
-    }
-
-    product = save_product_data_for_user(db, product_data_dict, current_user.id)
+    # Сохраняем товар
+    product = save_product_data(
+        db=db,
+        product_data=scraped_data,
+        user_id=current_user.id,
+    )
 
     return product
 
@@ -120,8 +121,6 @@ def get_price_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Получает историю цен только своего товара."""
-
     product = (
         db.query(Product)
         .filter(

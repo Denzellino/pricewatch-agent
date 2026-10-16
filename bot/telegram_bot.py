@@ -12,7 +12,7 @@ import os
 from dotenv import load_dotenv
 
 from app.database import SessionLocal
-from app.models import Alert, Product
+from app.models import Alert, Product, User
 
 load_dotenv()
 
@@ -43,62 +43,76 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def bind(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Привязывает текущий чат к товару"""
-
     if not context.args:
         await update.message.reply_text(
-            "❌ Использование: /bind <product_id>\n\n"
-            "Пример: /bind 1"
+            "❌ Использование: /bind <product_id>\n\nПример: /bind 1"
         )
         return
 
     try:
         product_id = int(context.args[0])
-        chat_id = str(update.message.chat_id)
+    except ValueError:
+        await update.message.reply_text("❌ Неверный формат. Пример: /bind 1")
+        return
 
-        db = SessionLocal()
+    chat_id = str(update.message.chat_id)
+    db = SessionLocal()
 
-        # Проверяем, существует ли товар
-        product = db.query(Product).filter(Product.id == product_id).first()
+    try:
+        user = db.query(User).filter(
+            User.telegram_chat_id == chat_id
+        ).first()
 
-        if not product:
-            await update.message.reply_text(f"❌ Товар с ID {product_id} не найден")
-            db.close()
+        if not user:
+            await update.message.reply_text(
+                "❌ Сначала привяжи аккаунт.\n"
+                "В веб-кабинете укажи этот Telegram chat_id:\n"
+                f"`{chat_id}`",
+                parse_mode="Markdown",
+            )
             return
 
-        # Проверяем, есть ли уже алерт
+        product = db.query(Product).filter(
+            Product.id == product_id,
+            Product.user_id == user.id,
+        ).first()
+
+        if not product:
+            await update.message.reply_text(
+                f"❌ Товар с ID {product_id} не найден среди твоих товаров."
+            )
+            return
+
         existing_alert = db.query(Alert).filter(
-            Alert.product_id == product_id,
-            Alert.telegram_chat_id == chat_id
+            Alert.product_id == product.id,
+            Alert.telegram_chat_id == chat_id,
         ).first()
 
         if existing_alert:
             await update.message.reply_text(
-                f"✅ Вы уже подписаны на уведомления для:\n{product.product_name[:100]}"
+                f"✅ Ты уже подписан на:\n{product.product_name[:100]}"
             )
-        else:
-            # Создаём новый алерт
-            alert = Alert(
-                product_id=product_id,
-                telegram_chat_id=chat_id,
-                threshold_percent=10.0
-            )
-            db.add(alert)
-            db.commit()
+            return
 
-            await update.message.reply_text(
-                f"✅ Вы подписаны на уведомления!\n\n"
-                f"📦 Товар: {product.product_name[:100]}\n"
-                f"💰 Текущая цена: {product.current_price}\n"
-                f"🔔 Порог уведомления: 10%"
-            )
+        alert = Alert(
+            product_id=product.id,
+            telegram_chat_id=chat_id,
+            threshold_percent=10.0,
+        )
+        db.add(alert)
+        db.commit()
 
-        db.close()
+        await update.message.reply_text(
+            f"✅ Подписка оформлена!\n\n"
+            f"📦 {product.product_name[:100]}\n"
+            f"💰 Текущая цена: {product.current_price}\n"
+            f"🔔 Порог: 10%"
+        )
 
-    except ValueError:
-        await update.message.reply_text("❌ Неверный формат. Пример: /bind 1")
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка: {e}")
+    finally:
+        db.close()
 
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):

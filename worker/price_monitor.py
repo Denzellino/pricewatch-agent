@@ -12,7 +12,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import Product
-from app.parser import GenericPriceParser, save_product_data
+from app.parser import save_product_data
+from app.parser_factory import ParserFactory
 import time
 from datetime import datetime
 
@@ -34,26 +35,28 @@ def monitor_prices():
             try:
                 print(f"🔍 Parsing: {product.product_name[:50]}...")
 
-                # Парсим URL
-                parser = GenericPriceParser(product.product_url)
+                parser = ParserFactory.get_parser(product.product_url)
                 scraped_data = parser.get_product_data()
 
                 if scraped_data:
-                    print(f"✅ New price: {scraped_data['price']}")
+                    print(
+                        f"✅ New price: {scraped_data['price']} "
+                        f"{scraped_data.get('currency', '')}"
+                    )
 
-                    # Сохраняем данные (с проверкой изменений)
-                    save_product_data(db, scraped_data, product.store_id)
+                    save_product_data(
+                        db=db,
+                        product_data=scraped_data,
+                        user_id=product.user_id,
+                    )
                 else:
                     print(f"⚠️ Failed to parse {product.product_url}")
 
-                # Небольшая задержка, чтобы не блокировали
                 time.sleep(2)
 
             except Exception as e:
                 print(f"❌ Error parsing {product.product_url}: {e}")
                 continue
-
-        print(f"✅ Price monitoring completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
     finally:
         db.close()
