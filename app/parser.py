@@ -103,8 +103,6 @@ def save_product_data(
         Product.user_id == user_id,
     ).first()
 
-    old_price = product.current_price if product else None
-
     if product is None:
         product = Product(
             user_id=user_id,
