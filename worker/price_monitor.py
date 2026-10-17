@@ -1,89 +1,142 @@
-import sys
+import logging
 import os
+import sys
+import time
 from pathlib import Path
 
-# Добавляем корень проекта в sys.path
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
-# Теперь импорты работают
-from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import Product
 from app.parser import save_product_data
 from app.parser_factory import ParserFactory
-import time
-from datetime import datetime
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+
+logger = logging.getLogger("price_monitor")
+
+CHECK_INTERVAL_MINUTES = int(os.getenv("PRICE_CHECK_INTERVAL_MINUTES", "30"))
+REQUEST_DELAY_SECONDS = float(os.getenv("PRICE_CHECK_DELAY_SECONDS", "2"))
 
 
-def monitor_prices():
-    """Основная функция мониторинга: парсит все активные товары"""
-
-    print(f"\n⏰ [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting price monitoring...")
+def process_product(product_id: int) -> bool:
+    """Парсит и сохраняет цену одного товара в отдельной DB-сессии."""
 
     db = SessionLocal()
 
     try:
-        # Получаем все активные товары
-        products = db.query(Product).filter(Product.is_active == True).all()
+        product = db.query(Product).filter(
+            Product.id == product_id,
+            Product.is_active.is_(True),
+        ).first()
 
-        print(f"📦 Found {len(products)} active products")
+        if not product:
+            logger.warning("Product %s not found or inactive", product_id)
+            return False
 
-        for product in products:
-            try:
-                print(f"🔍 Parsing: {product.product_name[:50]}...")
+        parser = ParserFactory.get_parser(product.product_url)
+        scraped_data = parser.get_product_data()
 
-                parser = ParserFactory.get_parser(product.product_url)
-                scraped_data = parser.get_product_data()
+        if not scraped_data:
+            logger.warning(
+                "Failed to parse product_id=%s url=%s",
+                product.id,
+                product.product_url,
+            )
+            return False
 
-                if scraped_data:
-                    print(
-                        f"✅ New price: {scraped_data['price']} "
-                        f"{scraped_data.get('currency', '')}"
-                    )
+        old_price = product.current_price
 
-                    save_product_data(
-                        db=db,
-                        product_data=scraped_data,
-                        user_id=product.user_id,
-                    )
-                else:
-                    print(f"⚠️ Failed to parse {product.product_url}")
+        save_product_data(
+            db=db,
+            product_data=scraped_data,
+            user_id=product.user_id,
+            product_id=product.id,
+        )
 
-                time.sleep(2)
+        logger.info(
+            "Product %s updated: %s -> %s %s",
+            product.id,
+            old_price,
+            scraped_data["price"],
+            scraped_data.get("currency", ""),
+        )
 
-            except Exception as e:
-                print(f"❌ Error parsing {product.product_url}: {e}")
-                continue
+        return True
+
+    except Exception:
+        logger.exception("Error processing product_id=%s", product_id)
+        return False
 
     finally:
         db.close()
 
 
-def run_scheduler():
-    """Запускает планировщик задач"""
+def monitor_prices():
+    """Проверяет все активные товары."""
 
+    logger.info("Starting price monitoring")
+
+    db = SessionLocal()
+
+    try:
+        product_ids = [
+            row[0]
+            for row in db.query(Product.id).filter(
+                Product.is_active.is_(True)
+            ).all()
+        ]
+    finally:
+        db.close()
+
+    logger.info("Found %s active products", len(product_ids))
+
+    updated = 0
+    failed = 0
+
+    for product_id in product_ids:
+        if process_product(product_id):
+            updated += 1
+        else:
+            failed += 1
+
+        time.sleep(REQUEST_DELAY_SECONDS)
+
+    logger.info(
+        "Price monitoring finished: updated=%s, failed=%s",
+        updated,
+        failed,
+    )
+
+
+def run_scheduler():
     scheduler = BlockingScheduler()
 
-    # Добавляем задачу: запускать каждые 30 минут
     scheduler.add_job(
         monitor_prices,
-        trigger=IntervalTrigger(minutes=30),
+        trigger=IntervalTrigger(minutes=CHECK_INTERVAL_MINUTES),
         id="price_monitor",
         replace_existing=True,
     )
 
-    monitor_prices()
+    logger.info(
+        "Price monitor scheduler started; interval=%s minutes",
+        CHECK_INTERVAL_MINUTES,
+    )
 
-    print("🤖 Price monitor scheduler started...")
-    print("⏰ Checking prices every 30 minutes")
+    monitor_prices()
 
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
-        print("🛑 Scheduler stopped")
+        logger.info("Price monitor scheduler stopped")
 
 
 if __name__ == "__main__":
