@@ -54,6 +54,8 @@ def check_price_changes(
     new_price,
     threshold: float = 10.0,
 ):
+    """Проверяет изменение цены и отправляет уведомления"""
+
     if old_price is None or new_price is None:
         return
 
@@ -92,19 +94,30 @@ def check_price_changes(
         except Exception as e:
             print(f"❌ Failed to send alert: {e}")
 
-
 def save_product_data(
     db: Session,
     product_data: Dict[str, Any],
     user_id: int,
+    product_id: int | None = None,
 ) -> Product:
     url = product_data["url"]
     new_price = Decimal(str(product_data["price"]))
 
-    product = db.query(Product).filter(
-        Product.product_url == url,
-        Product.user_id == user_id,
-    ).first()
+    product = None
+
+    if product_id is not None:
+        product = db.query(Product).filter(
+            Product.id == product_id,
+            Product.user_id == user_id,
+        ).first()
+
+    if product is None:
+        product = db.query(Product).filter(
+            Product.product_url == url,
+            Product.user_id == user_id,
+        ).first()
+
+    old_price = product.current_price if product else None
 
     if product is None:
         product = Product(
@@ -395,7 +408,7 @@ class GenericPriceParser(PriceParser):
                 return currency
 
         return "USD"
-    
+
 
 class AVSPriceParser(GenericPriceParser):
     """Специальный парсер для avs.by (Беларусь)"""

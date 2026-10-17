@@ -71,9 +71,11 @@ def run_scheduler():
     scheduler.add_job(
         monitor_prices,
         trigger=IntervalTrigger(minutes=30),
-        id='price_monitor',
-        replace_existing=True
+        id="price_monitor",
+        replace_existing=True,
     )
+
+    monitor_prices()
 
     print("🤖 Price monitor scheduler started...")
     print("⏰ Checking prices every 30 minutes")
