@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import products, pages, payments, auth, admin
+from app.routes import products, pages, payments, auth, admin, profile
 
 load_dotenv()
 
@@ -32,6 +32,7 @@ app.include_router(admin.router)
 app.include_router(pages.router)
 app.include_router(products.router)
 app.include_router(payments.router)
+app.include_router(profile.router)
 
 @app.on_event("startup")
 def startup_event():
