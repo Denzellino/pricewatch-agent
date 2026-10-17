@@ -37,9 +37,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📚 Помощь:\n\n"
         "1. Добавь товар на мониторинг через веб-интерфейс\n"
-        "2. Я буду присылать уведомления, если цена изменится более чем на 10%\n"
-        "3. Используй /status, чтобы проверить статус\n\n"
-        "Вопросы? Пиши @yourusername"
+        "2. /bind <product_id> — подписаться на уведомления\n"
+        "3. /unbind <product_id> — отключить уведомления\n"
+        "4. /status — список активных подписок\n\n"
+        "По умолчанию уведомление приходит при изменении цены более чем на 10%."
     )
 
 
@@ -124,6 +125,54 @@ async def bind(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.close()
 
 
+async def unbind(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отключает уведомления для конкретного товара"""
+
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Использование: /unbind <product_id>\n\n"
+            "Пример: /unbind 1\n\n"
+            "Список подписок: /status"
+        )
+        return
+
+    try:
+        product_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Неверный формат. Пример: /unbind 1"
+        )
+        return
+
+    chat_id = str(update.message.chat_id)
+    db = SessionLocal()
+
+    try:
+        alert = db.query(Alert).filter(
+            Alert.product_id == product_id,
+            Alert.telegram_chat_id == chat_id,
+            Alert.is_active.is_(True),
+        ).first()
+
+        if not alert:
+            await update.message.reply_text(
+                f"❌ Активная подписка на товар с ID {product_id} не найдена."
+            )
+            return
+
+        alert.is_active = False
+        db.commit()
+
+        await update.message.reply_text(
+            f"🔕 Уведомления для товара с ID {product_id} отключены."
+        )
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+    finally:
+        db.close()
+
+
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /status"""
     chat_id = str(update.message.chat_id)
@@ -170,6 +219,7 @@ def run_bot():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("bind", bind))
+    app.add_handler(CommandHandler("unbind", unbind))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown))
 
     # Запускаем
