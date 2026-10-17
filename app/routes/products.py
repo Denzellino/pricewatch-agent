@@ -32,6 +32,8 @@ class ProductResponse(BaseModel):
     current_price: Optional[float]
     currency: Optional[str]
     is_active: bool
+    last_checked_at: Optional[datetime] = None
+    last_error: Optional[str] = None
 
     class Config:
         from_attributes = True

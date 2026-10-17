@@ -14,6 +14,7 @@ from app.database import SessionLocal
 from app.models import Product
 from app.parser import save_product_data
 from app.parser_factory import ParserFactory
+from datetime import datetime, timezone
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,6 +46,10 @@ def process_product(product_id: int) -> bool:
         scraped_data = parser.get_product_data()
 
         if not scraped_data:
+            product.last_checked_at = datetime.now(timezone.utc)
+            product.last_error = "Failed to parse product data"
+            db.commit()
+
             logger.warning(
                 "Failed to parse product_id=%s url=%s",
                 product.id,
@@ -71,7 +76,11 @@ def process_product(product_id: int) -> bool:
 
         return True
 
-    except Exception:
+    except Exception as exc:
+        product.last_checked_at = datetime.now(timezone.utc)
+        product.last_error = str(exc)
+        db.commit()
+
         logger.exception("Error processing product_id=%s", product_id)
         return False
 

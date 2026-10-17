@@ -22,6 +22,8 @@ class Product(Base):
     user = relationship("User", back_populates="products")  # ← Изменили
     price_history = relationship("PriceHistory", back_populates="product", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="product", cascade="all, delete-orphan")
+    last_checked_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
 
 
 class PriceHistory(Base):

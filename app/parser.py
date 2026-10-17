@@ -126,6 +126,8 @@ def save_product_data(
             product_url=url,
             current_price=new_price,
             currency=product_data.get("currency", "USD"),
+            last_checked_at=datetime.utcnow(),
+            last_error=None,
         )
         db.add(product)
         db.flush()
@@ -136,6 +138,8 @@ def save_product_data(
             "currency",
             product.currency or "USD",
         )
+        product.last_checked_at = datetime.utcnow()
+        product.last_error = None
         product.updated_at = datetime.utcnow()
 
     price_history = PriceHistory(

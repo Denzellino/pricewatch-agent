@@ -199,11 +199,12 @@
                 <th>Валюта</th>
                 <th>URL</th>
                 <th>Действия</th>
+                <th>Последняя проверка</th>
             </tr>
             </thead>
             <tbody id="products-table">
             <tr>
-                <td colspan="6" style="text-align: center;">Загрузка...</td>
+                <td colspan="7" style="text-align: center;">Загрузка...</td>
             </tr>
             </tbody>
         </table>
@@ -286,6 +287,12 @@
                         <td>
                             <button class="btn btn-primary" onclick="viewHistory(${product.id})">История</button>
                             <button class="btn btn-danger" onclick="deleteProduct(${product.id})">Удалить</button>
+                        </td>
+                        <td>
+                            ${product.last_checked_at
+                            ? new Date(product.last_checked_at).toLocaleString()
+                            : 'Никогда'}
+                            ${product.last_error ? `<br><small style="color:#e74c3c;">${product.last_error}</small>` : ''}
                         </td>
                     </tr>
                 `).join('');
