@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from html import escape
 
 # Добавляем корень проекта в sys.path
 project_root = Path(__file__).resolve().parent.parent
@@ -43,16 +44,22 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def bind(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Привязывает Telegram-чат к товару текущего пользователя"""
+
     if not context.args:
         await update.message.reply_text(
-            "❌ Использование: /bind <product_id>\n\nПример: /bind 1"
+            "❌ Использование: /bind &lt;product_id&gt;\n\n"
+            "Пример: /bind 1",
+            parse_mode="HTML",
         )
         return
 
     try:
         product_id = int(context.args[0])
     except ValueError:
-        await update.message.reply_text("❌ Неверный формат. Пример: /bind 1")
+        await update.message.reply_text(
+            "❌ Неверный формат. Пример: /bind 1"
+        )
         return
 
     chat_id = str(update.message.chat_id)
@@ -65,10 +72,9 @@ async def bind(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not user:
             await update.message.reply_text(
-                "❌ Сначала привяжи аккаунт.\n"
-                "В веб-кабинете укажи этот Telegram chat_id:\n"
-                f"`{chat_id}`",
-                parse_mode="Markdown",
+                "❌ Сначала привяжи этот Telegram к аккаунту.\n\n"
+                f"Твой chat_id:\n<code>{escape(chat_id)}</code>",
+                parse_mode="HTML",
             )
             return
 
@@ -90,7 +96,9 @@ async def bind(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if existing_alert:
             await update.message.reply_text(
-                f"✅ Ты уже подписан на:\n{product.product_name[:100]}"
+                f"✅ Ты уже подписан на:\n"
+                f"<b>{escape(product.product_name[:100])}</b>",
+                parse_mode="HTML",
             )
             return
 
@@ -103,14 +111,15 @@ async def bind(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.commit()
 
         await update.message.reply_text(
-            f"✅ Подписка оформлена!\n\n"
-            f"📦 {product.product_name[:100]}\n"
-            f"💰 Текущая цена: {product.current_price}\n"
-            f"🔔 Порог: 10%"
+            "✅ Подписка оформлена!\n\n"
+            f"📦 <b>{escape(product.product_name[:100])}</b>\n"
+            f"💰 Текущая цена: {escape(str(product.current_price))}\n"
+            "🔔 Порог: 10%",
+            parse_mode="HTML",
         )
 
     except Exception as e:
-        await update.message.reply_text(f"❌ Ошибка: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {escape(str(e))}")
     finally:
         db.close()
 

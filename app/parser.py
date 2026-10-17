@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from app.models import Product, PriceHistory, Alert
 from datetime import datetime
+from html import escape
 
 import asyncio
 from telegram import Bot
@@ -31,14 +32,14 @@ async def send_price_alert(chat_id: str, product_name: str, old_price: float, ne
         f"💰 **Старая цена:** {old_price:.2f}\n"
         f"💰 **Новая цена:** {new_price:.2f}\n"
         f"📊 **Изменение:** {change_percent:+.1f}% ({direction})\n\n"
-        f"🔗 [Открыть товар]({product_url})"
+        f'🔗 <a href="{escape(product_url)}">Открыть товар</a>'
     )
 
     bot = Bot(token=BOT_TOKEN)
     await bot.send_message(
         chat_id=chat_id,
         text=message,
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     await bot.shutdown()
 
