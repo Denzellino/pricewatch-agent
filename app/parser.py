@@ -1,5 +1,9 @@
 import re
 import requests
+import os
+import asyncio
+import json
+
 from bs4 import BeautifulSoup
 from typing import Optional, Dict, Any
 
@@ -8,9 +12,8 @@ from app.models import Product, PriceHistory, Alert
 from datetime import datetime
 from html import escape
 
-import asyncio
+
 from telegram import Bot
-import os
 from dotenv import load_dotenv
 from decimal import Decimal
 
@@ -191,49 +194,128 @@ class PriceParser:
 class GenericPriceParser(PriceParser):
     """Универсальный парсер для большинства сайтов"""
 
-    def parse_price(self, html: str) -> Optional[float]:
-        soup = BeautifulSoup(html, 'html.parser')
+    def _parse_json_ld(self, soup: BeautifulSoup) -> tuple[Optional[float], Optional[str]]:
+        """Ищет цену и валюту в JSON-LD."""
 
-        # Приоритетные селекторы для текущей цены
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string or "{}")
+            except (TypeError, json.JSONDecodeError):
+                continue
+
+            candidates = data if isinstance(data, list) else [data]
+
+            for item in candidates:
+                if not isinstance(item, dict):
+                    continue
+
+                offers = item.get("offers")
+
+                if isinstance(offers, list):
+                    offers = offers[0] if offers else None
+
+                if not isinstance(offers, dict):
+                    continue
+
+                price = offers.get("price") or offers.get("lowPrice")
+                currency = offers.get("priceCurrency")
+
+                parsed_price = self._clean_price(str(price)) if price else None
+
+                if parsed_price:
+                    return parsed_price, currency.upper() if currency else None
+
+        return None, None
+
+    def _parse_microdata(self, soup: BeautifulSoup) -> tuple[Optional[float], Optional[str]]:
+        """Ищет цену и валюту в itemprop / meta-тегах."""
+
+        price_el = soup.select_one('[itemprop="price"]')
+        currency_el = soup.select_one('[itemprop="priceCurrency"]')
+
+        price = None
+        currency = None
+
+        if price_el:
+            price = (
+                price_el.get("content")
+                or price_el.get_text(strip=True)
+            )
+
+        if currency_el:
+            currency = (
+                currency_el.get("content")
+                or currency_el.get_text(strip=True)
+            )
+
+        if not price:
+            meta_price = soup.find("meta", property="product:price:amount")
+            if meta_price:
+                price = meta_price.get("content")
+
+        if not currency:
+            meta_currency = soup.find("meta", property="product:price:currency")
+            if meta_currency:
+                currency = meta_currency.get("content")
+
+        parsed_price = self._clean_price(str(price)) if price else None
+
+        if parsed_price:
+            return parsed_price, currency.upper() if currency else None
+
+        return None, None
+
+    def parse_price(self, html: str) -> Optional[float]:
+        soup = BeautifulSoup(html, "html.parser")
+
+        price, _ = self._parse_json_ld(soup)
+        if price:
+            return price
+
+        price, _ = self._parse_microdata(soup)
+        if price:
+            return price
+
         priority_selectors = [
-            '.price-current', '.ourprice', '.sale-price', '.special-price',
-            '[itemprop="price"]', '.price-final', '.actual-price'
+            ".price-current",
+            ".ourprice",
+            ".sale-price",
+            ".special-price",
+            '[itemprop="price"]',
+            ".price-final",
+            ".actual-price",
         ]
 
-        # Сначала ищем по приоритетным селекторам
         for selector in priority_selectors:
             element = soup.select_one(selector)
             if element:
-                price_text = element.get_text(strip=True)
-                price = self._clean_price(price_text)
+                price = self._clean_price(element.get_text(strip=True))
                 if price:
                     return price
 
-        # Затем ищем по обычным селекторам
         price_selectors = [
-            '.price', '.product-price', '.price-value', '.product-price-value',
-            '.regular-price', '.product-price-new'
+            ".price",
+            ".product-price",
+            ".price-value",
+            ".product-price-value",
+            ".regular-price",
+            ".product-price-new",
         ]
 
         for selector in price_selectors:
             element = soup.select_one(selector)
             if element:
-                price_text = element.get_text(strip=True)
-                price = self._clean_price(price_text)
+                price = self._clean_price(element.get_text(strip=True))
                 if price:
                     return price
 
-        # Если не нашли по селекторам, ищем по паттерну
-        # Паттерн для цен: 2.54, 2,54, $2.54, 2.54 BYN
-        price_pattern = r'(\d+[.,]\d{2})\s*(?:BYN|RUB|USD|EUR|₽|\$|€)?'
-        matches = re.findall(price_pattern, html)
+        matches = re.findall(
+            r"(\d+[.,]\d{2})\s*(?:BYN|RUB|USD|EUR|₽|\$|€)?",
+            html,
+        )
 
         if matches:
-            price_str = matches[0].replace(',', '.')
-            try:
-                return float(price_str)
-            except ValueError:
-                pass
+            return self._clean_price(matches[0])
 
         return None
 
@@ -288,50 +370,32 @@ class GenericPriceParser(PriceParser):
 
         return None
 
-
     def parse_currency(self, html: str) -> str:
-        """Определяет валюту из HTML"""
+        soup = BeautifulSoup(html, "html.parser")
 
-        soup = BeautifulSoup(html, 'html.parser')
+        _, currency = self._parse_json_ld(soup)
 
-        # Популярные селекторы для валюты
-        currency_element = soup.select_one(
-            '[itemprop="priceCurrency"]'
-        )
+        if not currency:
+            _, currency = self._parse_microdata(soup)
 
-        if currency_element:
-            currency = (
-                    currency_element.get("content")
-                    or currency_element.get_text(strip=True)
-            ).upper()
+        if currency in {"BYN", "RUB", "USD", "EUR", "KZT", "UAH"}:
+            return currency
 
-            if currency in {"BYN", "RUB", "USD", "EUR", "KZT", "UAH"}:
-                return currency
-
-        # Ищем в атрибутах
-        price_elements = soup.select('[itemprop="price"]')
-        for element in price_elements:
-            currency = element.get('content', '').upper()
-            if currency in ['BYN', 'RUB', 'USD', 'EUR', 'KZT', 'UAH']:
-                return currency
-
-        # Ищем по паттернам в тексте
         currency_patterns = {
-            'BYN': r'\bBYN\b|\bбел\.\s?руб\.\b|\bruble\b',
-            'RUB': r'\bRUB\b|\bруб\.\b|\b₽\b',
-            'USD': r'\bUSD\b|\$\b',
-            'EUR': r'\bEUR\b|\b€\b',
-            'KZT': r'\bKZT\b|\b₸\b',
-            'UAH': r'\bUAH\b|\b₴\b'
+            "BYN": r"\bBYN\b|\bбел\.\s?руб\.\b",
+            "RUB": r"\bRUB\b|\bруб\.\b|\b₽\b",
+            "USD": r"\bUSD\b|\$\b",
+            "EUR": r"\bEUR\b|\b€\b",
+            "KZT": r"\bKZT\b|\b₸\b",
+            "UAH": r"\bUAH\b|\b₴\b",
         }
 
         for currency, pattern in currency_patterns.items():
             if re.search(pattern, html, re.IGNORECASE):
                 return currency
 
-        # По умолчанию
-        return 'USD'
-
+        return "USD"
+    
 
 class AVSPriceParser(GenericPriceParser):
     """Специальный парсер для avs.by (Беларусь)"""
