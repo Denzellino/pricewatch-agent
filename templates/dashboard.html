@@ -351,11 +351,31 @@ e.preventDefault();
 
     // Удаление товара
     async function deleteProduct(product_id) {
-        if (!confirm('Вы уверены?')) return;
+        if (!confirm('Удалить товар и всю историю цен?')) return;
 
-        // TODO: Реализовать DELETE endpoint
-        alert('Функция в разработке');
+        try {
+            const response = await fetch(`${API_BASE}/products/${product_id}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders(),
+            });
+
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            }
+
+            if (response.ok) {
+                loadProducts();
+                return;
+            }
+
+            const error = await response.json();
+            alert('❌ Ошибка: ' + (error.detail || 'Не удалось удалить товар'));
+        } catch (error) {
+            alert('❌ Ошибка: ' + error.message);
+        }
     }
+
 
     // Загрузка при старте
     loadData();

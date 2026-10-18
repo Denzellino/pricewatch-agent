@@ -160,3 +160,25 @@ def get_price_history(
         .all()
     )
 
+
+@router.delete("/{product_id}")
+def delete_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    product = db.query(Product).filter(
+        Product.id == product_id,
+        Product.user_id == current_user.id,
+    ).first()
+
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found",
+        )
+
+    db.delete(product)
+    db.commit()
+
+    return {"status": "success", "deleted_product_id": product_id}
