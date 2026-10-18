@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -9,7 +9,7 @@ from app.models import PriceHistory, Product, User, Subscription
 from app.parser_factory import ParserFactory
 from app.parser import save_product_data
 from app.utils.auth import get_current_active_user
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 from app.models import PriceHistory
@@ -37,6 +37,20 @@ class ProductResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_validator("last_checked_at", mode="before")
+    @classmethod
+    def ensure_utc(cls, value):
+        if value is None:
+            return value
+
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+
+        return value
 
 
 @router.post("/", response_model=ProductResponse)
@@ -145,3 +159,4 @@ def get_price_history(
         .limit(100)
         .all()
     )
+

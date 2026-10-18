@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any
 
 from sqlalchemy.orm import Session
 from app.models import Product, PriceHistory, Alert
-from datetime import datetime
+from datetime import datetime, timezone
 from html import escape
 
 
@@ -126,7 +126,7 @@ def save_product_data(
             product_url=url,
             current_price=new_price,
             currency=product_data.get("currency", "USD"),
-            last_checked_at=datetime.utcnow(),
+            last_checked_at=datetime.now(timezone.utc),
             last_error=None,
         )
         db.add(product)

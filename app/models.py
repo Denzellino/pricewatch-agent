@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, DECIMAL, Text
 from sqlalchemy.orm import relationship, declarative_base
-from datetime import datetime
+from datetime import datetime, timezone
 
 Base = declarative_base()
 
@@ -22,7 +22,7 @@ class Product(Base):
     user = relationship("User", back_populates="products")  # ← Изменили
     price_history = relationship("PriceHistory", back_populates="product", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="product", cascade="all, delete-orphan")
-    last_checked_at = Column(DateTime, nullable=True)
+    last_checked_at = Column(DateTime(timezone=True), nullable=True)
     last_error = Column(Text, nullable=True)
 
 
