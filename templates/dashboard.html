@@ -301,6 +301,7 @@
                         <td>${product.currency || 'USD'}</td>
                         <td><a href="${product.product_url}" target="_blank">🔗 Ссылка</a></td>
                         <td>
+                            <button class="btn btn-primary" onclick="checkProduct(${product.id})">🔄 Проверить</button>
                             <button class="btn btn-primary" onclick="viewHistory(${product.id})">История</button>
                             <button class="btn btn-danger" onclick="deleteProduct(${product.id})">Удалить</button>
                         </td>
@@ -375,7 +376,41 @@ e.preventDefault();
             alert('❌ Ошибка: ' + error.message);
         }
     }
+    async function checkProduct(product_id) {
+    const button = event.target;
+    const originalText = button.textContent;
 
+    button.disabled = true;
+    button.textContent = '⏳ Проверяю...';
+
+    try {
+        const response = await fetch(
+            `${API_BASE}/products/${product_id}/check`,
+            {
+                method: 'POST',
+                headers: getAuthHeaders(),
+            }
+        );
+
+        if (response.status === 401) {
+            window.location.href = '/login';
+            return;
+        }
+
+        if (response.ok) {
+            await loadProducts();
+            return;
+        }
+
+        const error = await response.json();
+        alert('❌ Ошибка: ' + (error.detail || 'Не удалось проверить цену'));
+    } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
 
     // Загрузка при старте
     loadData();

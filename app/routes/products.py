@@ -182,3 +182,38 @@ def delete_product(
     db.commit()
 
     return {"status": "success", "deleted_product_id": product_id}
+
+
+@router.post("/{product_id}/check", response_model=ProductResponse)
+def check_product_now(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Проверяет цену товара прямо сейчас"""
+
+    product = db.query(Product).filter(
+        Product.id == product_id,
+        Product.user_id == current_user.id,
+    ).first()
+
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found",
+        )
+
+    parser = ParserFactory.get_parser(product.product_url)
+    scraped_data = parser.get_product_data()
+
+    if not scraped_data:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to parse product data",
+        )
+
+    return save_product_data(
+        db=db,
+        product_data=scraped_data,
+        user_id=current_user.id,
+    )
