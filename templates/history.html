@@ -50,62 +50,164 @@
         th {
             background: #f9f9f9;
         }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <a href="/dashboard" class="back-link">← Назад в дашборд</a>
 
-        <div class="card">
-            <h1>📊 История цен</h1>
-            <p><strong>Товар:</strong> {{ product.product_name }}</p>
-            <p><strong>URL:</strong> <a href="{{ product.product_url }}" target="_blank">🔗 Открыть</a></p>
-        </div>
-
-        <div class="card">
-            <h2>📈 История изменений</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Дата</th>
-                        <th>Цена</th>
-                    </tr>
-                </thead>
-                <tbody id="history-table">
-                    <tr>
-                        <td colspan="2" style="text-align: center;">Загрузка...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <script>
-        const productId = {{ product_id }};
-
-        async function loadHistory() {
-            try {
-                const response = await fetch(`/products/${productId}/history`);
-                const history = await response.json();
-
-                const tbody = document.getElementById('history-table');
-
-                if (history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="2" style="text-align: center;">Нет данных</td></tr>';
-                } else {
-                    tbody.innerHTML = history.map(item => `
-                        <tr>
-                            <td>${new Date(item.scraped_at).toLocaleString('ru-RU')}</td>
-                            <td>${item.price.toFixed(2)}</td>
-                        </tr>
-                    `).join('');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            }
+        .price-up {
+            color: #e74c3c;
+            font-weight: bold;
         }
 
-        loadHistory();
-    </script>
+        .price-down {
+            color: #27ae60;
+            font-weight: bold;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<div class="container">
+    <a href="/dashboard" class="back-link">← Назад в дашборд</a>
+
+    <div class="card">
+        <h1>📊 История цен</h1>
+        <p><strong>Товар:</strong> {{ product.product_name }}</p>
+        <p><strong>URL:</strong> <a href="{{ product.product_url }}" target="_blank">🔗 Открыть</a></p>
+    </div>
+
+    <div class="card">
+        <h2>📉 График цены</h2>
+        <canvas id="price-chart"></canvas>
+    </div>
+
+    <div class="card">
+        <h2>📈 История изменений</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>Дата</th>
+                <th>Цена</th>
+                <th>Изменение</th>
+            </tr>
+            </thead>
+            <tbody id="history-table">
+            <tr>
+                <td colspan="3" style="text-align: center;">Загрузка...</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const productId = {{ product_id }};
+
+    function getAuthHeaders() {
+const token = localStorage.getItem('token');
+
+if (!token) {
+    window.location.href = '/login';
+    return;
+}
+
+return {
+    'Authorization': `Bearer ${token}`
+};
+}
+
+    async function loadHistory() {
+        try {
+            const response = await fetch(`/products/${productId}/history`, {
+headers: getAuthHeaders()
+});
+            if (response.status === 401) {
+window.location.href = '/login';
+return;
+}
+            const history = await response.json();
+
+            const tbody = document.getElementById('history-table');
+
+            if (history.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Нет данных</td></tr>';
+            } else {
+                tbody.innerHTML = history.map((item, index) => {
+    const previous = history[index + 1];
+    let changeHtml = '—';
+
+    if (previous && previous.price !== 0) {
+        const change = ((item.price - previous.price) / previous.price) * 100;
+        const className = change > 0 ? 'price-up' : change < 0 ? 'price-down' : '';
+        const sign = change > 0 ? '+' : '';
+
+        changeHtml = `<span class="${className}">${sign}${change.toFixed(2)}%</span>`;
+    }
+
+    return `
+        <tr>
+            <td>${new Date(item.scraped_at).toLocaleString('ru-RU')}</td>
+            <td>${item.price.toFixed(2)}</td>
+            <td>${changeHtml}</td>
+        </tr>
+    `;
+}).join('');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+
+    async function renderChart() {
+        const response = await fetch(`/products/${productId}/history`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.status === 401) {
+            window.location.href = '/login';
+            return;
+        }
+
+        const history = await response.json();
+
+        const sorted = [...history].reverse();
+        const labels = sorted.map(item =>
+            new Date(item.scraped_at).toLocaleString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+            })
+        );
+        const prices = sorted.map(item => item.price);
+
+        new Chart(document.getElementById('price-chart'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Цена',
+                    data: prices,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.15)',
+                    fill: true,
+                    tension: 0.25,
+                    pointRadius: 3,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false
+                    }
+                }
+            }
+        });
+    }
+
+    loadHistory();
+    renderChart();
+</script>
 </body>
 </html>
